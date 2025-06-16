@@ -9,6 +9,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Import VideoProcessor for video analysis capabilities
+try:
+    from tree_of_thoughts.video_processor import VideoProcessor
+except ImportError:
+    VideoProcessor = None
+
 
 def string_to_dict(thought_string):
     return eval(thought_string)
@@ -64,9 +70,11 @@ class TotAgent:
         max_loops (int): The maximum number of loops the agent can run.
         model (OpenAIFunctionCaller): The OpenAI function caller for the agent.
         agent (Agent): The agent responsible for running tasks.
+        video_processor (VideoProcessor): Optional video processor for handling video analysis tasks.
 
     Methods:
         run(task: str) -> dict: Runs a task using the agent and returns the output as a dictionary.
+        analyze_video(video_url: str, prompt: str) -> dict: Analyzes video content using video processor.
     """
 
     def __init__(
@@ -75,6 +83,9 @@ class TotAgent:
         max_loops: int = None,
         use_openai_caller: bool = True,
         model: Optional[Any] = None,
+        enable_video_processing: bool = False,
+        video_api_base: str = "http://localhost:8000/v1",
+        video_model_name: str = "Qwen/Qwen2.5-VL-32B-Instruct",
         *args,
         **kwargs,
     ):
@@ -84,6 +95,9 @@ class TotAgent:
         Args:
             id (str, optional): The unique identifier for the agent. Defaults to a randomly generated UUID.
             max_loops (int, optional): The maximum number of loops the agent can run. Defaults to None.
+            enable_video_processing (bool): Whether to enable video processing capabilities.
+            video_api_base (str): Base URL for the video processing API server.
+            video_model_name (str): Name of the video model to use.
             *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments.
         """
@@ -117,6 +131,14 @@ class TotAgent:
             *args,
             **kwargs,
         )
+        
+        # Initialize video processor if requested and available
+        self.video_processor = None
+        if enable_video_processing and VideoProcessor is not None:
+            self.video_processor = VideoProcessor(
+                api_base=video_api_base,
+                model_name=video_model_name
+            )
 
     def run(self, task: Any) -> dict:
         """
@@ -130,3 +152,75 @@ class TotAgent:
         """
         agent_output = self.agent.run(task)
         return string_to_dict(agent_output)
+    
+    def analyze_video(
+        self, 
+        video_url: str, 
+        prompt: str = "请用表格总结一下视频中的商品特点",
+        total_pixels: int = 20480 * 28 * 28,
+        min_pixels: int = 16 * 28 * 2,
+        fps: float = 3.0
+    ) -> dict:
+        """
+        Analyzes video content using the integrated video processor.
+        
+        Args:
+            video_url: URL or path to the video file
+            prompt: Text prompt for video analysis
+            total_pixels: Total pixels for video processing
+            min_pixels: Minimum pixels for video processing
+            fps: Frames per second for video processing
+            
+        Returns:
+            Dictionary containing the analysis results
+            
+        Raises:
+            ValueError: If video processing is not enabled or VideoProcessor is not available
+        """
+        if self.video_processor is None:
+            raise ValueError(
+                "Video processing is not enabled. Initialize TotAgent with enable_video_processing=True"
+            )
+        
+        # Use video processor to analyze the video
+        video_result = self.video_processor.process_video(
+            video_url=video_url,
+            text_prompt=prompt,
+            total_pixels=total_pixels,
+            min_pixels=min_pixels,
+            fps=fps
+        )
+        
+        # Combine video analysis with ToT reasoning
+        analysis_task = f"""
+        Based on the following video analysis result, please provide a structured thought process 
+        and evaluation of the video content:
+        
+        Video Analysis Result: {video_result.get('content', 'No content available')}
+        
+        Please break down your analysis into thoughts and provide evaluations for each thought.
+        """
+        
+        # Run the task through the ToT agent
+        tot_analysis = self.run(analysis_task)
+        
+        return {
+            "video_analysis": video_result,
+            "tot_reasoning": tot_analysis,
+            "combined_result": {
+                "video_content": video_result.get('content'),
+                "structured_thoughts": tot_analysis
+            }
+        }
+    
+    def analyze_video_features(self, video_url: str) -> dict:
+        """
+        Convenience method to analyze video features using a predefined prompt.
+        
+        Args:
+            video_url: URL or path to the video file
+            
+        Returns:
+            Dictionary containing the feature analysis results
+        """
+        return self.analyze_video(video_url, "请用表格总结一下视频中的商品特点")

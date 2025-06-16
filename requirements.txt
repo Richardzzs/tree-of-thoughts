@@ -3,3 +3,7 @@ pydantic
 loguru
 python-dotenv
 swarm-models
+numpy
+Pillow
+openai
+qwen-vl-utils

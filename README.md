@@ -19,6 +19,31 @@
 
 Tree of Thoughts (ToT) is a powerful and flexible algorithm that significantly advances model reasoning by up to 70%. This plug-and-play version allows you to connect your own models and experience superintelligence!
 
+### 🎥 New: Video Processing Capabilities
+
+This repository now includes enhanced video processing capabilities using Qwen VL models! You can:
+
+- **Analyze video content** with AI-powered video understanding
+- **Combine video analysis with Tree of Thoughts reasoning** for structured insights  
+- **Extract features and patterns** from video content automatically
+- **Process multiple video formats** with customizable parameters
+
+For detailed video processing documentation, see [VIDEO_PROCESSING.md](VIDEO_PROCESSING.md).
+
+Quick video processing example:
+```python
+from tree_of_thoughts import TotAgent
+
+# Initialize agent with video capabilities
+agent = TotAgent(enable_video_processing=True)
+
+# Analyze video with structured reasoning
+result = agent.analyze_video(
+    video_url="path/to/video.mp4", 
+    prompt="分析视频中的商品特点"
+)
+```
+
 
 ## Install
 
