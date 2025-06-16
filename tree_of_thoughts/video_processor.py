@@ -1,6 +1,6 @@
 """
-Video processing module for Tree of Thoughts.
-Provides functionality to process video content using Qwen VL models.
+思维树视频处理模块
+为思维树提供使用Qwen VL模型处理视频内容的功能
 """
 
 import base64
@@ -15,17 +15,16 @@ from dotenv import load_dotenv
 try:
     from qwen_vl_utils import process_vision_info
 except ImportError:
-    raise ImportError("qwen_vl_utils is required for video processing. Please install it with: pip install qwen_vl_utils")
+    raise ImportError("视频处理需要qwen_vl_utils库。请使用以下命令安装: pip install qwen_vl_utils")
 
 load_dotenv()
 
 
 class VideoProcessor:
     """
-    A class for processing video content using Qwen VL models via vLLM API server.
+    使用Qwen VL模型通过vLLM API服务器处理视频内容的类
     
-    This class handles video frame extraction, encoding, and communication with
-    the vLLM API server for video understanding tasks.
+    该类处理视频帧提取、编码以及与vLLM API服务器的通信，用于视频理解任务
     """
     
     def __init__(
@@ -35,36 +34,34 @@ class VideoProcessor:
         model_name: str = "Qwen/Qwen2.5-VL-32B-Instruct"
     ):
         """
-        Initialize the VideoProcessor.
+        初始化视频处理器
         
-        Args:
-            api_key: OpenAI API key (default "EMPTY" for vLLM)
-            api_base: Base URL for the vLLM API server
-            model_name: Name of the model to use
+        参数:
+            api_key: OpenAI API密钥 (vLLM默认使用"EMPTY")
+            api_base: vLLM API服务器的基础URL
+            model_name: 要使用的模型名称
         """
         self.api_key = api_key
         self.api_base = api_base
         self.model_name = model_name
         
         self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.api_base,
+            api_key=self.api_key,            base_url=self.api_base,
         )
     
     def prepare_message_for_vllm(self, content_messages: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """
-        Prepare video messages for vLLM processing.
+        为vLLM处理准备视频消息
         
-        The frame extraction logic for videos in `vLLM` differs from that of `qwen_vl_utils`.
-        Here, we utilize `qwen_vl_utils` to extract video frames, with the `media_type` of 
-        the video explicitly set to `video/jpeg`. By doing so, vLLM will no longer attempt 
-        to extract frames from the input base64-encoded images.
+        vLLM中视频的帧提取逻辑与qwen_vl_utils不同。
+        这里我们使用qwen_vl_utils来提取视频帧，并将视频的media_type显式设置为video/jpeg。
+        这样，vLLM就不会再尝试从输入的base64编码图像中提取帧。
         
-        Args:
-            content_messages: List of message dictionaries containing video content
+        参数:
+            content_messages: 包含视频内容的消息字典列表
             
-        Returns:
-            Tuple of (processed_messages, video_kwargs)
+        返回:
+            (处理后的消息, 视频参数) 的元组
         """
         vllm_messages, fps_list = [], []
         
@@ -81,11 +78,11 @@ class VideoProcessor:
                     image_inputs, video_inputs, video_kwargs = process_vision_info(
                         video_message, return_video_kwargs=True
                     )
-                    assert video_inputs is not None, "video_inputs should not be None"
+                    assert video_inputs is not None, "video_inputs不应为None"
                     video_input = (video_inputs.pop()).permute(0, 2, 3, 1).numpy().astype(np.uint8)
                     fps_list.extend(video_kwargs.get('fps', []))
 
-                    # Encode images with base64
+                    # 使用base64编码图像
                     base64_frames = []
                     for frame in video_input:
                         img = Image.fromarray(frame)
@@ -102,8 +99,7 @@ class VideoProcessor:
                 new_content_list.append(part_message)
             
             message["content"] = new_content_list
-            vllm_messages.append(message)
-        
+            vllm_messages.append(message)        
         return vllm_messages, {'fps': fps_list}
     
     def process_video(
@@ -113,21 +109,21 @@ class VideoProcessor:
         total_pixels: int = 20480 * 28 * 28,
         min_pixels: int = 16 * 28 * 2,
         fps: float = 3.0,
-        system_message: str = "You are a helpful assistant."
+        system_message: str = "你是一个有帮助的助手。"
     ) -> Dict[str, Any]:
         """
-        Process a video with a text prompt using the Qwen VL model.
+        使用Qwen VL模型处理视频和文本提示
         
-        Args:
-            video_url: URL or path to the video file
-            text_prompt: Text prompt describing what to analyze in the video
-            total_pixels: Total pixels for video processing
-            min_pixels: Minimum pixels for video processing
-            fps: Frames per second for video processing
-            system_message: System message for the model
+        参数:
+            video_url: 视频文件的URL或路径
+            text_prompt: 描述要分析视频内容的文本提示
+            total_pixels: 视频处理的总像素数
+            min_pixels: 视频处理的最小像素数
+            fps: 视频处理的每秒帧数
+            system_message: 模型的系统消息
             
-        Returns:
-            Dictionary containing the model's response
+        返回:
+            包含模型响应的字典
         """
         video_messages = [
             {"role": "system", "content": system_message},
@@ -139,14 +135,13 @@ class VideoProcessor:
                     "total_pixels": total_pixels,
                     "min_pixels": min_pixels,
                     'fps': fps
-                }]
-            },
+                }]            },
         ]
         
-        # Prepare messages for vLLM
+        # 为vLLM准备消息
         processed_messages, video_kwargs = self.prepare_message_for_vllm(video_messages)
         
-        # Get chat completion
+        # 获取聊天补全
         chat_response = self.client.chat.completions.create(
             model=self.model_name,
             messages=processed_messages,
@@ -156,40 +151,39 @@ class VideoProcessor:
         )
         
         return {
-            "response": chat_response,
-            "content": chat_response.choices[0].message.content if chat_response.choices else None,
+            "response": chat_response,            "content": chat_response.choices[0].message.content if chat_response.choices else None,
             "video_kwargs": video_kwargs
         }
     
     def analyze_video_features(self, video_url: str) -> Dict[str, Any]:
         """
-        Analyze and summarize features of a video using a table format.
+        使用表格格式分析和总结视频的特征
         
-        Args:
-            video_url: URL or path to the video file
+        参数:
+            video_url: 视频文件的URL或路径
             
-        Returns:
-            Dictionary containing the analysis results
+        返回:
+            包含分析结果的字典
         """
         prompt = "请用表格总结一下视频中的商品特点"
         return self.process_video(video_url, prompt)
 
 
-# Example usage function
+# 示例使用函数
 def example_video_analysis():
     """
-    Example function demonstrating how to use the VideoProcessor.
+    演示如何使用VideoProcessor的示例函数
     """
-    # Initialize the processor
+    # 初始化处理器
     processor = VideoProcessor()
     
-    # Example video URL
+    # 示例视频URL
     video_url = "https://duguang-labelling.oss-cn-shanghai.aliyuncs.com/qiansun/video_ocr/videos/50221078283.mp4"
     
-    # Analyze video features
+    # 分析视频特征
     result = processor.analyze_video_features(video_url)
     
-    print("Video analysis result:")
+    print("视频分析结果:")
     print(result["content"])
     
     return result
